@@ -1,0 +1,1 @@
+New-SelfSignedCertificate -DnsName "localhost" -CertStoreLocation "cert:\CurrentUser\My" | Export-Certificate -FilePath $env:USERPROFILE\Desktop\web-net-core.cer

@@ -37,7 +37,7 @@ public class HomeController : Controller
 
     SecretClient? client = null;
 
-    if (bool.Parse(_configuration["IsHostedInAzure"]))
+    if (bool.Parse(_configuration["IsHostedOnPrem"]))
     {
       client = new SecretClient(new Uri(kvUri),
                                     new DefaultAzureCredential(new DefaultAzureCredentialOptions

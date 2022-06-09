@@ -8,15 +8,6 @@ builder.Services.AddControllersWithViews();
 
 if (bool.Parse(builder.Configuration["IsHostedInAzure"]))
 {
-  builder.Configuration.AddAzureKeyVault(
-    new Uri($"https://{builder.Configuration["Authentication:KeyVaultName"]}.vault.azure.net/"),
-    new DefaultAzureCredential(new DefaultAzureCredentialOptions
-    {
-      ManagedIdentityClientId = builder.Configuration["Authentication:ManagedIdentityClientId"]
-    }));
-}
-else
-{
   var x509Store = new X509Store(StoreName.My,
                                 StoreLocation.CurrentUser);
 
@@ -34,6 +25,15 @@ else
       builder.Configuration["Authentication:AzureADDirectoryId"],
       builder.Configuration["Authentication:AzureADApplicationId"],
       x509Certificate));
+}
+else
+{
+  builder.Configuration.AddAzureKeyVault(
+    new Uri($"https://{builder.Configuration["Authentication:KeyVaultName"]}.vault.azure.net/"),
+    new DefaultAzureCredential(new DefaultAzureCredentialOptions
+    {
+      ManagedIdentityClientId = builder.Configuration["Authentication:ManagedIdentityClientId"]
+    }));
 }
 
 var app = builder.Build();

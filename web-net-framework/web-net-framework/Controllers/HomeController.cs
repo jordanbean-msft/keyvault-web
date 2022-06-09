@@ -39,16 +39,8 @@ namespace web_net_framework.Controllers
 
             if (bool.Parse(ConfigurationManager.AppSettings["IsHostedInAzure"]))
             {
-                client = new SecretClient(new Uri(kvUri),
-                                              new DefaultAzureCredential(new DefaultAzureCredentialOptions
-                                              {
-                                                  ManagedIdentityClientId = ConfigurationManager.AppSettings["Authentication:ManagedIdentityClientId"]
-                                              }));
-            }
-            else
-            {
                 var x509Store = new X509Store(StoreName.My,
-                                              StoreLocation.CurrentUser);
+                                      StoreLocation.CurrentUser);
 
                 x509Store.Open(OpenFlags.ReadOnly);
 
@@ -63,6 +55,15 @@ namespace web_net_framework.Controllers
                                                 ConfigurationManager.AppSettings["Authentication:AzureADDirectoryId"],
                                                 ConfigurationManager.AppSettings["Authentication:AzureADApplicationId"],
                                                 x509Certificate));
+            }
+            else
+            {
+                client = new SecretClient(new Uri(kvUri),
+                                              new DefaultAzureCredential(new DefaultAzureCredentialOptions
+                                              {
+                                                  ManagedIdentityClientId = ConfigurationManager.AppSettings["Authentication:ManagedIdentityClientId"]
+                                              }));
+
             }
 
             var theKingOfAustriaSecret = await client.GetSecretAsync("the-king-of-austria");

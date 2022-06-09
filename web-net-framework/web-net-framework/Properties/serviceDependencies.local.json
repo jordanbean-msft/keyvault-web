@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "compute.appService1": {
+      "group": "connections",
+      "resourceId": "/subscriptions/[parameters('subscriptionId')]/resourceGroups/[parameters('resourceGroupName')]/providers/Microsoft.Web/sites/wa-keyvault-web-framework-ussc-dev",
+      "type": "compute.appService.windows"
+    }
+  }
+}

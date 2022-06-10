@@ -33,39 +33,64 @@ public class HomeController : Controller
   private async Task<string> GetTheKingOfEngland()
   {
     string keyVaultName = _configuration["Authentication:KeyVaultName"];
-    var kvUri = "https://" + keyVaultName + ".vault.azure.net";
+    string kvUri = $"https://{_configuration["KeyVaultName"]}.vault.azure.net/";
 
     SecretClient? client = null;
 
     if (bool.Parse(_configuration["IsHostedOnPrem"]))
     {
-      client = new SecretClient(new Uri(kvUri),
-                                    new DefaultAzureCredential(new DefaultAzureCredentialOptions
-                                    {
-                                      ManagedIdentityClientId = _configuration["Authentication:ManagedIdentityClientId"]
-                                    }));
-    }
-    else
-    {
       var x509Store = new X509Store(StoreName.My,
-                                    StoreLocation.CurrentUser);
+                                    StoreLocation.LocalMachine);
 
       x509Store.Open(OpenFlags.ReadOnly);
 
-      var x509Certificate = x509Store.Certificates.Find(X509FindType.FindByThumbprint,
-                                                        _configuration["Authentication:AzureADCertificateThumbprint"],
-                                                        validOnly: false)
-                                                  .OfType<X509Certificate2>()
-                                                  .Single();
+      X509Certificate2 x509Certificate;
 
-      client = new SecretClient(new Uri(kvUri),
-                                    new ClientCertificateCredential(
-                                      _configuration["Authentication:AzureADDirectoryId"],
-                                      _configuration["Authentication:AzureADApplicationId"],
-                                      x509Certificate));
+      try
+      {
+        x509Certificate = x509Store.Certificates.Find(X509FindType.FindByThumbprint,
+                                                      _configuration["Authentication:AzureADCertificateThumbprint"],
+                                                      validOnly: false)
+                                                .OfType<X509Certificate2>()
+                                                .Single();
+      }
+      catch (Exception ex)
+      {
+        throw new Exception($"Unable to find certificate in cert:\\LocalMachine\\My with thumbprint: {_configuration["Authentication:AzureADCertificateThumbprint"]}", ex);
+      }
+            try
+            {
+                client = new SecretClient(new Uri(kvUri),
+                                              new ClientCertificateCredential(
+                                                _configuration["Authentication:AzureADDirectoryId"],
+                                                _configuration["Authentication:AzureADApplicationId"],
+                                                x509Certificate));
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Unable to create SecretClient with Uri: {kvUri}, AzureADDirectoryId: {_configuration["Authentication:AzureADDirectoryId"]}, AzureADApplicationId: {_configuration["Authentication:AzureADApplicationId"]}, certificateThumbprint: {_configuration["Authentication:AzureADCertificateThumbprint"]}", ex);
+            }
+        }
+        else
+        {
+            client = new SecretClient(new Uri(kvUri),
+                                          new DefaultAzureCredential(new DefaultAzureCredentialOptions
+                                          {
+                                              ManagedIdentityClientId = _configuration["Authentication:ManagedIdentityClientId"]
+                                          }));
+
+        }
+
+        Response<KeyVaultSecret> secret;
+
+    try
+    {
+      secret = await client.GetSecretAsync("the-king-of-england");
     }
-
-    var secret = await client.GetSecretAsync("the-king-of-england");
+    catch (Exception ex)
+    {
+      throw new Exception($"Unable to get secret \"the-king-of-england\" from Key Vault {kvUri}", ex);
+    }
 
     return secret.Value.Value;
   }

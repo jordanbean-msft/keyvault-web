@@ -6,34 +6,45 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddControllersWithViews();
 
-if (bool.Parse(builder.Configuration["IsHostedInAzure"]))
+string kvUri = $"https://{builder.Configuration["KeyVaultName"]}.vault.azure.net/";
+
+if (bool.Parse(builder.Configuration["IsHostedOnPrem"]))
 {
   var x509Store = new X509Store(StoreName.My,
-                                StoreLocation.CurrentUser);
+                                StoreLocation.LocalMachine);
 
   x509Store.Open(OpenFlags.ReadOnly);
 
-  var x509Certificate = x509Store.Certificates.Find(X509FindType.FindByThumbprint,
-                                                    builder.Configuration["Authentication:AzureADCertificateThumbprint"],
-                                                    validOnly: false)
-                                              .OfType<X509Certificate2>()
-                                              .Single();
+  X509Certificate2 x509Certificate;
 
-  builder.Configuration.AddAzureKeyVault(
-    new Uri($"https://{builder.Configuration["Authentication:KeyVaultName"]}.vault.azure.net/"),
-    new ClientCertificateCredential(
+  try
+  {
+    x509Certificate = x509Store.Certificates.Find(X509FindType.FindByThumbprint,
+                                                  builder.Configuration["Authentication:AzureADCertificateThumbprint"],
+                                                  validOnly: false)
+                                            .OfType<X509Certificate2>()
+                                            .Single();
+  }
+  catch (Exception ex)
+  {
+    throw new Exception($"Unable to find certificate in cert:\\LocalMachine\\My with thumbprint: {builder.Configuration["Authentication:AzureADCertificateThumbprint"]}", ex);
+  }
+
+  try
+  {
+    builder.Configuration.AddAzureKeyVault(new Uri(kvUri), new ClientCertificateCredential(
       builder.Configuration["Authentication:AzureADDirectoryId"],
       builder.Configuration["Authentication:AzureADApplicationId"],
       x509Certificate));
+  }
+  catch (Exception ex)
+  {
+    throw new Exception($"Unable to create SecretClient with Uri: {kvUri}, AzureADDirectoryId: {builder.Configuration["Authentication:AzureADDirectoryId"]}, AzureADApplicationId: {builder.Configuration["Authentication:AzureADApplicationId"]}, certificateThumbprint: {builder.Configuration["Authentication:AzureADCertificateThumbprint"]}", ex);
+  }
 }
 else
 {
-  builder.Configuration.AddAzureKeyVault(
-    new Uri($"https://{builder.Configuration["Authentication:KeyVaultName"]}.vault.azure.net/"),
-    new DefaultAzureCredential(new DefaultAzureCredentialOptions
-    {
-      ManagedIdentityClientId = builder.Configuration["Authentication:ManagedIdentityClientId"]
-    }));
+  builder.Configuration.AddAzureKeyVault(new Uri(kvUri), new DefaultAzureCredential(new DefaultAzureCredentialOptions { ManagedIdentityClientId = builder.Configuration["Authentication:ManagedIdentityClientId"] }));
 }
 
 var app = builder.Build();

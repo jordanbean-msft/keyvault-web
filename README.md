@@ -1,8 +1,20 @@
 # keyvault-web
 
-This repo shows how to retrieve secrets stored in an Azure KeyVault using a .NET Framework & .NET Core application. It demonstrates both pulling the secrets via middleware at startup time and dynamically when a page is loaded.
+This repo shows how to retrieve secrets stored in an Azure Key Vault using a .NET Framework & .NET Core application. It demonstrates both pulling the secrets via middleware at startup time and dynamically when a page is loaded.
 
-![architecture](.img/architecture.png)
+## Onprem deployment
+
+![architecture-onprem](.img/architecture-onprem.png)
+
+Onprem, you need to provide a way for the running application to access the Key Vault securly. This is accomplished via service principal provisioned in Azure Active Directory. This service principal is then granted access to the Key Vault. The application authenticates to Azure Active Directory using a X.509 certificate so that it can use the service principal to access the Key Vault.
+
+## Azure deployment
+
+![architecture-azure](.img/architecture-azure.png)
+
+In Azure, the process can be simplified by using a Managed Identity. The Managed Identity is granted access to the Key Vault & is assigned to the App Service so code running in the App Service can use it.
+
+**Note**: This repo intentionally doesn't access the secrets through the Azure App Service configuration so that it is portable between onprem & Azure. If you are only targeting Azure, you can store the secrets in the [App Service configuration](https://docs.microsoft.com/en-us/azure/app-service/app-service-key-vault-references?tabs=azure-cli).
 
 ## Disclaimer
 
@@ -10,9 +22,23 @@ This repo shows how to retrieve secrets stored in an Azure KeyVault using a .NET
 
 ## .NET Framework
 
-## .NET Core
+The .NET Framework version of this application pulls the secrets from Key Vault when the web page is loaded. It does not have a middleware that pulls the secrets at startup time. You can install a common middleware like [OWIN]() to provide a middleware, but this is not required.
 
-**Note**: This repo intentionally doesn't store the secrets in the Azure App Service configuration so that it is portable between onprem & Azure. If you are only targeting Azure, you can store the secrets in the [App Service configuration](https://docs.microsoft.com/en-us/azure/app-service/app-service-key-vault-references?tabs=azure-cli).
+If you look at the `./web-net-framework/Web.config` file, you can see the following app settings which will allow the application to authenticate with Azure Active Directory so it can use the service principal to access the Key Vault.
+
+```xml
+<appSettings>
+  ...
+  <add key="Authentication:KeyVaultName" value="kv-keyvault-web-ussc-dev" />
+  <add key="Authentication:AzureADApplicationId" value="9bfd1049-3cfe-4466-a684-2b5fb636b03e" />
+  <add key="Authentication:AzureADCertificateThumbprint" value="A17D4362FBF40049BB4AA7EB465D082358C7878A" />
+  <add key="Authentication:AzureADDirectoryId" value="72f988bf-86f1-41af-91ab-2d7cd011db47" />
+  <add key="Authentication:ManagedIdentityClientId" value="" />
+  <add key="IsHostedOnPrem" value="false" />
+</appSettings>
+```
+
+## .NET Core
 
 ## Prerequisites
 
@@ -20,6 +46,7 @@ This repo shows how to retrieve secrets stored in an Azure KeyVault using a .NET
 - [Dotnet CLI](https://docs.microsoft.com/en-us/dotnet/core/tools/)
 - [.NET Framework 4.7.2](https://dotnet.microsoft.com/en-us/download/dotnet-framework)
 - Azure subscription & resource group
+- Onprem server
 
 ## Deployment
 
@@ -29,7 +56,22 @@ This repo shows how to retrieve secrets stored in an Azure KeyVault using a .NET
 az deployment group create -g rg-keyvault-web-ussc-dev --template-file ./infra/main.bicep --parameters ./infra/env/dev.parameters.json --parameters theKingOfAustriaSecretValue="Joseph the 2nd" theKingOfPrussiaSecretValue="Fredrick Wilhelm the 3rd" theKingOfEnglandSecretValue="Why the tyrant King George, of course!"
 ```
 
+### Create the certificate
+
+```shell
+./create-certificate.ps1
+```
+
+### Create the app registration
+
 ### Build/publish .NET Framework Web App & deploy to Azure
+
+1.  Update the `./web-net-framework/Web.config` file with the your values.
+
+    - `KeyVaultName` - the name of your Key Vault
+    - `Authentication:AzureADApplicationId` - the application ID (client ID) of your service principal
+    - `Authentication:AzureADCertificateThumbprint` - the thumbprint of the certificate installed on the machine that will be used to authenticate with Azure Active Directory
+    - `Authentication:AzureADDirectoryId` - the tenant ID where your service principal is instantiated
 
 1.  Right-click on the project and select **Build**.
 
@@ -43,11 +85,7 @@ az deployment group create -g rg-keyvault-web-ussc-dev --template-file ./infra/m
 
 1.  Click **Publish** to push your app to the App Service.
 
-### Create the certificate
-
-```shell
-.\create-certificate.ps1
-```
+### Grant the app registration access to Key Vault
 
 ### Build/publish .NET Core Web App & deploy to Azure
 

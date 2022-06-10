@@ -10,6 +10,9 @@
     },
     "environment": {
       "value": "dev"
+    },
+    "azureADApplicationId": {
+      "value": "9bfd1049-3cfe-4466-a684-2b5fb636b03e"
     }
   }
 }

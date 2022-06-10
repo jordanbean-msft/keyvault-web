@@ -4,6 +4,8 @@ param appServiceNetFrameworkName string
 param managedIdentityName string
 param logAnalyticsWorkspaceName string
 param appInsightsName string
+param azureADApplicationId string
+param azureADDirectoryId string
 
 resource appServicePlan 'Microsoft.Web/serverfarms@2021-03-01' existing = {
   name: appServicePlanName
@@ -60,6 +62,14 @@ resource appServiceNetFramework 'Microsoft.Web/sites@2021-02-01' = {
         {
           name: 'XDT_MicrosoftApplicationInsights_Mode'
           value: 'Recommended'
+        }
+        {
+          name: 'Authentication:AzureADApplicationId'
+          value: azureADApplicationId
+        }
+        {
+          name: 'Authentication:AzureADDirectoryId'
+          value: azureADDirectoryId
         }
       ]
     }

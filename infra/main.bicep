@@ -8,6 +8,8 @@ param theKingOfAustriaSecretValue string
 param theKingOfPrussiaSecretValue string
 @secure()
 param theKingOfEnglandSecretValue string
+param azureADApplicationId string
+param azureADDirectoryId string = subscription().tenantId
 
 module names 'resource-names.bicep' = {
   name: 'resource-names'
@@ -70,6 +72,8 @@ module appServiceNetCoreDeployment 'app-service-net-core.bicep' = {
     location: location
     logAnalyticsWorkspaceName: loggingDeployment.outputs.logAnalyticsWorkspaceName
     managedIdentityName: managedIdentityDeployment.outputs.managedIdentityName
+    azureADApplicationId: azureADApplicationId
+    azureADDirectoryId: azureADDirectoryId
   }
 }
 
@@ -82,5 +86,7 @@ module appServiceNetFrameworkDeployment 'app-service-net-framework.bicep' = {
     location: location
     logAnalyticsWorkspaceName: loggingDeployment.outputs.logAnalyticsWorkspaceName
     managedIdentityName: managedIdentityDeployment.outputs.managedIdentityName
+    azureADApplicationId: azureADApplicationId
+    azureADDirectoryId: azureADDirectoryId
   }
 }

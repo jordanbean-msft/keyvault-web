@@ -138,13 +138,65 @@ It is recommeded that you get a signed certificate from your company's certifica
 ./create-certificate.ps1
 ```
 
-### Create the app registration
+### Create the app registration/service principal
+
+You will need a service principal in Azure Active Directory to be the identity that your application uses to access the Key Vault.
+
+1.  Navigate to the [Azure portal](https://portal.azure.com) and sign in.
+
+1.  Click on the `Azure Active Directory` link in the left-hand navigation menu.
+
+1.  Click on the `App registrations` blade.
+
+1.  Click on the `New registration` button.
+
+1.  Give it a name & a redirect uri where your application will be listening (http://localhost as an example for running locally).
+
+![register-application](.img/register-application.png)
+
+1.  Click on the `Certificates & secrets` blade.
+
+1.  Upload the certificate that was created in the previous step. Save the `Thumbprint` value for configuring the application.
+
+![upload-cert](.img/upload-cert.png)
+
+1.  On the `Overview` blade, copy the `Application ID (client ID)` and the `Directory (tenant) ID` values for configuring the application.
+
+![aad-overview](.img/aad-overview.png)
 
 ### Deploy the infrastructure
+
+1.  Modify the `./infra/env/dev.parameters.json` file as needed. Make sure and update the `azureADApplicationId` with the `Application ID (client ID)` value from the previous step.
 
 ```shell
 az deployment group create -g rg-keyvault-web-ussc-dev --template-file ./infra/main.bicep --parameters ./infra/env/dev.parameters.json --parameters theKingOfAustriaSecretValue="Joseph the 2nd" theKingOfPrussiaSecretValue="Fredrick Wilhelm the 3rd" theKingOfEnglandSecretValue="Why the tyrant King George, of course!"
 ```
+
+### Grant the app registration access to Key Vault
+
+1.  Navigate to the [Azure portal](https://portal.azure.com) and sign in.
+
+1.  Select the `Key Vault` created in the previous step.
+
+1.  Click on the `Access policies` blade.
+
+1.  Click on the `Add Access Policy` button.
+
+1.  Add `Get` and `List` `Secret permissions`.
+
+![get-list-permissions](.img/get-list-permissions.png)
+
+1.  Click on the `Select principal` button.
+
+1.  Search for your newly created service principal (from the previous step), select it and click the `Select` button. Click on the `Add` button.
+
+![keyVault-add-access-policy](.img/keyVault-add-access-policy.png)
+
+1.  Click on the `Save` button.
+
+1.  Repeat these steps for the Managed Identity created in the previous step.
+
+![keyVault-access-policies](.img/keyVault-access-policies.png)
 
 ### Build/publish .NET Framework Web App & deploy to Azure
 
@@ -166,8 +218,6 @@ az deployment group create -g rg-keyvault-web-ussc-dev --template-file ./infra/m
 1.  Select your **Azure subscription**, **Resource Group** and **App Service instance** (make sure and select the **wa-net-framework** App Service), then **Finish** and **Close**.
 
 1.  Click **Publish** to push your app to the App Service.
-
-### Grant the app registration access to Key Vault
 
 ### Build/publish .NET Core Web App & deploy to Azure
 

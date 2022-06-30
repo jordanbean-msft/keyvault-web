@@ -17,6 +17,7 @@ namespace web_net_framework.Services
         public const string certificateThumbprintTag = "certificateThumbprint";
         public const string tenantIdTag = "tenantId";
         public const string clientIdTag = "clientId";
+        
         public string CertificateStoreName { get; protected set; }
         public string CertificateStoreLocation { get; protected set; }
         public string CertificateThumbprint { get; protected set; }
@@ -76,10 +77,9 @@ namespace web_net_framework.Services
                 throw new ArgumentException($"Unable to find certificate in cert:\\{CertificateStoreLocation}\\{CertificateStoreName} with thumbprint: {CertificateThumbprint}", ex);
             }
 
-            var tokenCredential = new ClientCertificateCredential(
-                                               TenantId,
-                                                ClientId,
-                                                x509Certificate);
+            var tokenCredential = new ClientCertificateCredential(TenantId,
+                                                                  ClientId,
+                                                                  x509Certificate);
 
             return tokenCredential;
         }

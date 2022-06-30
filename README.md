@@ -33,26 +33,29 @@ In Azure, the process can be simplified by using a Managed Identity. The Managed
 
 ## .NET Framework
 
-The .NET Framework version of this application pulls the secrets from Key Vault when the web page is loaded. It does not have a middleware that pulls the secrets at startup time. You can install a common middleware like [OWIN](https://docs.microsoft.com/en-us/aspnet/aspnet/overview/owin-and-katana/) to provide a middleware, but this is not required. If you install & use OWIN, you can add similar code in the Startup.cs file to pull the secrets at startup time.
+The .NET Framework version of this application pulls the secrets from Key Vault when the web page is loaded. It does not have a default inversion of control container that pulls the secrets at startup time. Instead, it uses a custom implementation of the `ConfigBuilder` to pull the certificate from the Windows certificate store to authenticate to Azure with & pull all the secrets from Key Vault.
 
 The following NuGet packages are required to access Key Vault using .NET Framework (these will install some additional dependencies):
 
 - Azure.Identity
 - Azure.Security.KeyVault.Secrets
+- Microsoft.Configuration.ConfigurationBuilders.Azure
 
-If you look at the `./web-net-framework/Web.config` file, you can see the following app settings which will allow the application to authenticate with Azure Active Directory so it can use the service principal to access the Key Vault.
+If you look at the `./web-net-framework/Web.config` file, you can see the following `configBuilder` section which tells teh custom `CertificateAuthenticationAzureKeyVaultConfigBuilder` class how to authenticate with Azure Active Directory so it can use the service principal to access the Key Vault.
 
 ```xml
-<appSettings>
+<configBuilders>
+    <builders>
+      <add name="KeyVault" mode="Greedy" vaultName="kv-keyvault-web-ussc-dev" enabled="true" certificateStoreName="My" certificateStoreLocation="LocalMachine" certificateThumbprint="a17d4362fbf40049bb4aa7eb465d082358c7878a" tenantId="72f988bf-86f1-41af-91ab-2d7cd011db47" clientId="9bfd1049-3cfe-4466-a684-2b5fb636b03e" type="web_net_framework.Services.CertificateAuthenticationAzureKeyVaultConfigBuilder, web-net-framework" />
+    </builders>
+  </configBuilders>
+  <appSettings configBuilders="KeyVault">
+    <add key="the-king-of-england" value="Elizabeth II" />
   ...
-  <add key="KeyVaultName" value="kv-keyvault-web-ussc-dev" />
-  <add key="Authentication:AzureADApplicationId" value="9bfd1049-3cfe-4466-a684-2b5fb636b03e" />
-  <add key="Authentication:AzureADCertificateThumbprint" value="A17D4362FBF40049BB4AA7EB465D082358C7878A" />
-  <add key="Authentication:AzureADDirectoryId" value="72f988bf-86f1-41af-91ab-2d7cd011db47" />
-  <add key="Authentication:ManagedIdentityClientId" value="" />
-  <add key="IsHostedOnPrem" value="true" />
 </appSettings>
 ```
+
+You will notice that the `appSettings` section of the `Web.config` file has a value already for `the-king-of-england`. Naturally, this value is wrong and we want to override it with the value from Key Vault. The `Greedy` flag will override the value from the `Web.config` withe the one from Key Vault if it was able to successfully authenticate & pull secrets.
 
 Here is what the running application should look like if it was able to successfully authenticate with Azure Active Directory & pull secrets from Key Vault.
 
@@ -60,37 +63,41 @@ Here is what the running application should look like if it was able to successf
 
 ### Onprem authentication with certificate
 
-In the `./web-net-framework/Controllers/HomeController.cs`, we pull the certificate from the local store, authenticate with Azure AD, then pull the secrets that are needed.
+In the `./web-net-framework/Services/CertificateAuthenticationAzureKeyVaultConfigBuilder.cs`, we pull the certificate from the local store, authenticate with Azure AD, then pull the secrets that are needed. This custom class is needed because the default implementation of the `AzureKeyVaultConfigBuilder` will try to use the `DefaultAzureCredentials` class which will not work on the onprem server since it doesn't have a managed identity nor does the service account running the app pool have access to Azure. Instead, we want to pull a certificate from the local store and authenticate with Azure AD.
 
 ```cs
-string keyVaultName = ConfigurationManager.AppSettings["KeyVaultName"];
-var kvUri = "https://" + keyVaultName + ".vault.azure.net";
+protected override TokenCredential GetCredential()
+{
+    StoreName storeName = (StoreName)Enum.Parse(typeof(StoreName), CertificateStoreName);
 
-SecretClient client = null;
+    StoreLocation storeLocation = (StoreLocation)Enum.Parse(typeof(StoreLocation), CertificateStoreLocation);
 
-var x509Store = new X509Store(StoreName.My,
-                      StoreLocation.LocalMachine);
+    var x509Store = new X509Store(storeName,
+                                  storeLocation);
 
-x509Store.Open(OpenFlags.ReadOnly);
+    x509Store.Open(OpenFlags.ReadOnly);
 
-X509Certificate2 x509Certificate;
+    X509Certificate2 x509Certificate;
 
-// Get the certificate from the store based upon the thumbprint
-x509Certificate = x509Store.Certificates.Find(X509FindType.FindByThumbprint,
-                                              ConfigurationManager.AppSettings["Authentication:AzureADCertificateThumbprint"],
-                                              validOnly: false)
-                                        .OfType<X509Certificate2>()
-                                        .Single();
+    try
+    {
+        x509Certificate = x509Store.Certificates.Find(X509FindType.FindByThumbprint,
+                                                      CertificateThumbprint,
+                                                      validOnly: false)
+                                                .OfType<X509Certificate2>()
+                                                .Single();
+    }
+    catch (Exception ex)
+    {
+        throw new ArgumentException($"Unable to find certificate in cert:\\{CertificateStoreLocation}\\{CertificateStoreName} with thumbprint: {CertificateThumbprint}", ex);
+    }
 
-// Authenticate with Azure AD, passing in the certificate & indicating with service principal to authenticate with (specified via the AzureADApplicationId)
-client = new SecretClient(new Uri(kvUri),
-                              new ClientCertificateCredential(
-                                ConfigurationManager.AppSettings["Authentication:AzureADDirectoryId"],
-                                ConfigurationManager.AppSettings["Authentication:AzureADApplicationId"],
-                                x509Certificate));
+    var tokenCredential = new ClientCertificateCredential(TenantId,
+                                                          ClientId,
+                                                          x509Certificate);
 
-// Get the secrets
-theKingOfAustriaSecret = await client.GetSecretAsync("the-king-of-austria");
+    return tokenCredential;
+}
 ```
 
 ### App Service with Managed Identity
@@ -241,20 +248,14 @@ You will likely need to configure the onprem server to be able to use the certif
 
 1.  Open the `./web-net-framework/web-net-framework.sln` file in Visual Studio.
 
-1.  Update the `./web-net-framework/Web.config` file with the your values.
+1.  Update the `./web-net-framework/Web.config` file with the your values in the `configBuilders` section.
 
-    - `KeyVaultName` - the name of your Key Vault
-    - `Authentication:AzureADApplicationId` - the application ID (client ID) of your service principal
-    - `Authentication:AzureADCertificateThumbprint` - the thumbprint of the certificate installed on the machine that will be used to authenticate with Azure Active Directory
-    - `Authentication:AzureADDirectoryId` - the tenant ID where your service principal is instantiated
-    - `Authentication:ManagedIdentityClientId` - this value doesn't need to be set when running onprem (since there is no managed identity to use)
-    - `IsHostedOnPrem` - set this value to `true`
-
-**Note**: You can also set these values in IIS and override the values in the `./web-net-framework/Web.config` file.
-
-![iis-application-settings](.img/iis-application-settings.png)
-
-![iis-application-settings-thumbprint](.img/iis-application-settings-thumbprint.png)
+    - `vaultName` - the name of your Key Vault
+    - `clientId` - the application ID (client ID) of your service principal
+    - `certificateThumbprint` - the thumbprint of the certificate installed on the machine that will be used to authenticate with Azure Active Directory
+    - `certificateStoreName` - the name of the certificate store you want to pull from
+    - `certificateStoreLocation` - the location of the certificate store you want to pull from
+    - `tenantId` - the tenant ID where your service principal is instantiated
 
 1.  Right-click on the project and select **Build**.
 

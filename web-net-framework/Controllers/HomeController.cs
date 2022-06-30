@@ -23,90 +23,12 @@ namespace web_net_framework.Controllers
     {
         public async Task<ActionResult> Index()
         {
-            SecretData secretData = await GetSecrets();
-            ViewData["the-king-of-austria"] = secretData.TheKingOfAustria;
-            ViewData["the-king-of-prussia"] = secretData.TheKingOfPrussia;
-            ViewData["the-king-of-england"] = secretData.TheKingOfEngland;
+            ViewData["the-king-of-austria"] = ConfigurationManager.AppSettings["the-king-of-austria"];
+            ViewData["the-king-of-prussia"] = ConfigurationManager.AppSettings["the-king-of-prussia"];
+            ViewData["the-king-of-england"] = ConfigurationManager.AppSettings["the-king-of-england"];
 
             return View();
         }
-
-        private async Task<SecretData> GetSecrets()
-        {
-            string keyVaultName = ConfigurationManager.AppSettings["KeyVaultName"];
-            var kvUri = "https://" + keyVaultName + ".vault.azure.net";
-
-            SecretClient client = null;
-
-            if (bool.Parse(ConfigurationManager.AppSettings["IsHostedOnPrem"]))
-            {
-                var x509Store = new X509Store(StoreName.My,
-                                      StoreLocation.LocalMachine);
-
-                x509Store.Open(OpenFlags.ReadOnly);
-
-                X509Certificate2 x509Certificate;
-
-                try
-                {
-                    x509Certificate = x509Store.Certificates.Find(X509FindType.FindByThumbprint,
-                                                                  ConfigurationManager.AppSettings["Authentication:AzureADCertificateThumbprint"],
-                                                                  validOnly: false)
-                                                            .OfType<X509Certificate2>()
-                                                            .Single();
-                }
-                catch(Exception ex)
-                {
-                    throw new Exception($"Unable to find certificate in cert:\\LocalMachine\\My with thumbprint: {ConfigurationManager.AppSettings["Authentication:AzureADCertificateThumbprint"]}", ex);
-                }
-
-                try
-                {
-                    client = new SecretClient(new Uri(kvUri),
-                                                  new ClientCertificateCredential(
-                                                    ConfigurationManager.AppSettings["Authentication:AzureADDirectoryId"],
-                                                    ConfigurationManager.AppSettings["Authentication:AzureADApplicationId"],
-                                                    x509Certificate));
-                }
-                catch(Exception ex)
-                {
-                    throw new Exception($"Unable to create SecretClient with Uri: {kvUri}, AzureADDirectoryId: {ConfigurationManager.AppSettings["Authentication:AzureADDirectoryId"]}, AzureADApplicationId: {ConfigurationManager.AppSettings["Authentication:AzureADApplicationId"]}, certificateThumbprint: {ConfigurationManager.AppSettings["Authentication:AzureADCertificateThumbprint"]}", ex);                }
-            }
-            else
-            {
-                client = new SecretClient(new Uri(kvUri),
-                                              new DefaultAzureCredential(new DefaultAzureCredentialOptions
-                                              {
-                                                  ManagedIdentityClientId = ConfigurationManager.AppSettings["Authentication:ManagedIdentityClientId"]
-                                              }));
-
-            }
-
-            Response<KeyVaultSecret> theKingOfAustriaSecret;
-            Response<KeyVaultSecret> theKingOfPrussiaSecret;
-            Response<KeyVaultSecret> theKingOfEnglandSecret;
-
-            try
-            {
-                theKingOfAustriaSecret = await client.GetSecretAsync("the-king-of-austria");
-                theKingOfPrussiaSecret = await client.GetSecretAsync("the-king-of-prussia");
-                theKingOfEnglandSecret = await client.GetSecretAsync("the-king-of-england");
-            }
-            catch(Exception ex)
-            {
-                throw new Exception($"Unable to get secrets from Key Vault {kvUri}", ex);
-            }
-
-            SecretData returnData = new SecretData
-            {
-                TheKingOfAustria = theKingOfAustriaSecret.Value.Value,
-                TheKingOfPrussia = theKingOfPrussiaSecret.Value.Value,
-                TheKingOfEngland = theKingOfEnglandSecret.Value.Value
-            };
-
-            return returnData;
-        }
-
         public ActionResult About()
         {
             ViewBag.Message = "Your application description page.";
